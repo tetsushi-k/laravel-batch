@@ -1,0 +1,12 @@
+# Docker
+.env
+
+# Laravel
+src/vendor/
+src/.env
+src/storage/logs/*.log
+src/bootstrap/cache/*.php
+
+# OS
+.DS_Store
+Thumbs.db
