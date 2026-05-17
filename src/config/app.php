@@ -7,7 +7,7 @@ return [
     | Application Name
     |--------------------------------------------------------------------------
     */
-    'name' => env('APP_NAME', 'Laravel Batch Monthly Report'),
+    'name' => env('APP_NAME', 'Laravel Batch'),
 
     /*
     |--------------------------------------------------------------------------

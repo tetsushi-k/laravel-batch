@@ -1,8 +1,8 @@
 {
     "name": "laravel/laravel",
     "type": "project",
-    "description": "Laravel Batch Monthly Report - ECサービス月次集計バッチ処理ポートフォリオ",
-    "keywords": ["laravel", "batch", "queue", "scheduler", "mailable"],
+    "description": "Laravel Batch - 月次集計と日次売上アラートの2バッチ構成によるバッチ処理ポートフォリオ",
+    "keywords": ["laravel", "batch", "queue", "scheduler", "mailable", "event", "slack"],
     "license": "MIT",
     "require": {
         "php": "^8.2",

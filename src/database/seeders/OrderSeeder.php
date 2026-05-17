@@ -10,12 +10,14 @@ use Illuminate\Database\Seeder;
 /**
  * 注文シーダー
  *
- * バッチ処理の動作確認用注文データを生成する。
- * - 前月分: 15件（paid 10件 + unpaid 5件）
- * - 今月分: 5件（動作確認用）
+ * 月次バッチ・日次バッチ双方の動作確認用注文データを生成する。
+ * - 前月分: 15件（paid 10件 + unpaid 5件） … 月次バッチ用
+ * - 今月分: 5件（動作確認用・集計対象外）
+ * - 昨日分: 5件（paid 3件 + unpaid 2件） … 日次バッチ用
  *
  * 未払い注文（unpaid）が存在するユーザーに対して
- * バッチ実行時にリマインドメールが送信される。
+ * 月次バッチ実行時にリマインドメールが送信される。
+ * 昨日分の未払いは日次バッチ実行時に Slack 通知の警告マークが付く。
  */
 class OrderSeeder extends Seeder
 {
@@ -30,6 +32,7 @@ class OrderSeeder extends Seeder
 
         $lastMonth = Carbon::now('Asia/Tokyo')->subMonth();
         $thisMonth = Carbon::now('Asia/Tokyo');
+        $yesterday = Carbon::yesterday('Asia/Tokyo');
 
         // 前月分の注文データ（集計対象）
         $lastMonthOrders = [
@@ -64,16 +67,29 @@ class OrderSeeder extends Seeder
             ['user_id' => $users[4]->id, 'amount' => 15500, 'status' => 'paid',   'created_at' => $thisMonth->copy()->setDay(9)],
         ];
 
-        $allOrders = array_merge($lastMonthOrders, $thisMonthOrders);
+        // 昨日分の注文データ（日次バッチの集計対象）
+        // paid 3件・unpaid 2件で、Slack 通知に未払い件数の警告が出る
+        $yesterdayOrders = [
+            ['user_id' => $users[0]->id, 'amount' => 7800,  'status' => 'paid',   'created_at' => $yesterday->copy()->setTime(10, 0)],
+            ['user_id' => $users[1]->id, 'amount' => 13200, 'status' => 'paid',   'created_at' => $yesterday->copy()->setTime(11, 30)],
+            ['user_id' => $users[2]->id, 'amount' => 4500,  'status' => 'unpaid', 'created_at' => $yesterday->copy()->setTime(14, 15)],
+            ['user_id' => $users[3]->id, 'amount' => 9600,  'status' => 'paid',   'created_at' => $yesterday->copy()->setTime(16, 45)],
+            ['user_id' => $users[4]->id, 'amount' => 3000,  'status' => 'unpaid', 'created_at' => $yesterday->copy()->setTime(20, 0)],
+        ];
+
+        $allOrders = array_merge($lastMonthOrders, $thisMonthOrders, $yesterdayOrders);
 
         foreach ($allOrders as $order) {
             Order::create($order);
         }
 
         $lastMonthStr = $lastMonth->format('Y-m');
+        $yesterdayStr = $yesterday->toDateString();
         $unpaidCount = collect($lastMonthOrders)->where('status', 'unpaid')->count();
+        $yesterdayUnpaidCount = collect($yesterdayOrders)->where('status', 'unpaid')->count();
 
-        $this->command->info("  ✓ Orders: 前月({$lastMonthStr}) 15件 + 今月 5件 = 合計20件を作成しました");
-        $this->command->info("  ✓ うち前月の未払い注文: {$unpaidCount}件（リマインド対象: user2, user4, user5）");
+        $this->command->info("  ✓ Orders: 前月({$lastMonthStr}) 15件 + 今月 5件 + 昨日({$yesterdayStr}) 5件 = 合計25件を作成しました");
+        $this->command->info("  ✓ うち前月の未払い: {$unpaidCount}件（月次バッチのリマインド対象: user2, user4, user5）");
+        $this->command->info("  ✓ うち昨日の未払い: {$yesterdayUnpaidCount}件（日次バッチで Slack に警告通知）");
     }
 }

@@ -44,7 +44,7 @@ return [
     */
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'no-reply@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'Laravel Batch Monthly Report'),
+        'name' => env('MAIL_FROM_NAME', 'Laravel Batch'),
     ],
 
 ];

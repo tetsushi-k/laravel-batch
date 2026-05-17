@@ -25,3 +25,16 @@ Schedule::command('app:monthly-report')
     ->timezone('Asia/Tokyo')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/batch-monthly-report.log'));
+
+/**
+ * 日次売上アラートバッチ
+ *
+ * 毎朝 09:00 JST に前日の売上を集計し、Slack へ通知する。
+ * withoutOverlapping(): 前回の処理が完了していない場合は実行をスキップ。
+ * appendOutputTo(): 実行結果をログファイルに追記。
+ */
+Schedule::command('app:daily-sales-alert')
+    ->dailyAt('09:00')
+    ->timezone('Asia/Tokyo')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/batch-daily-sales-alert.log'));

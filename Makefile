@@ -1,13 +1,13 @@
 # =============================================================
-# Makefile - Laravel Batch Monthly Report
+# Makefile - Laravel Batch
 # Usage: make <target>
 # =============================================================
 
-.PHONY: help setup up down restart bash migrate seed batch batch-force worker logs ps
+.PHONY: help setup up down restart bash migrate seed batch batch-force daily daily-force daily-date daily-date-force worker logs ps
 
 help:
 	@echo ""
-	@echo "Laravel Batch Monthly Report - Available commands"
+	@echo "Laravel Batch - Available commands"
 	@echo "=================================================="
 	@echo "  make setup        First-time setup (install, key:generate, migrate, seed)"
 	@echo "  make up           Start containers"
@@ -17,8 +17,12 @@ help:
 	@echo "  make migrate      Run migrations"
 	@echo "  make seed         Seed test data"
 	@echo "  make batch        Run monthly report batch"
-	@echo "  make batch-force  Force re-run (ignore idempotency check)"
-	@echo "  make worker       Start queue worker (foreground)"
+	@echo "  make batch-force  Force re-run monthly batch (ignore idempotency check)"
+	@echo "  make daily              Run daily sales alert batch (yesterday)"
+	@echo "  make daily-force        Force re-run daily batch (ignore idempotency check)"
+	@echo "  make daily-date DATE=YYYY-MM-DD       Run daily batch for specific date"
+	@echo "  make daily-date-force DATE=YYYY-MM-DD Force re-run for specific date"
+	@echo "  make worker             Start queue worker in foreground (debug; queue container is already running)"
 	@echo "  make logs         Tail container logs"
 	@echo "  make ps           Show container status"
 	@echo ""
@@ -61,14 +65,36 @@ batch:
 	@echo "=== Running monthly report batch ==="
 	docker compose exec app php artisan app:monthly-report
 	@echo ""
-	@echo "Check mail queue: make worker"
+	@echo "Mails are processed by the 'queue' container automatically."
+	@echo "Check logs: docker compose logs -f queue"
 
 batch-force:
 	@echo "=== Force running monthly report batch ==="
 	docker compose exec app php artisan app:monthly-report --force
 
+daily:
+	@echo "=== Running daily sales alert batch ==="
+	docker compose exec app php artisan app:daily-sales-alert
+	@echo ""
+	@echo "Check Slack or set SLACK_WEBHOOK_URL in .env"
+
+daily-force:
+	@echo "=== Force running daily sales alert batch ==="
+	docker compose exec app php artisan app:daily-sales-alert --force
+
+# 任意の日付を指定して実行: make daily-date DATE=2026-05-10
+daily-date:
+	@echo "=== Running daily sales alert batch for $(DATE) ==="
+	docker compose exec app php artisan app:daily-sales-alert --date=$(DATE)
+
+# 任意の日付を強制再実行: make daily-date-force DATE=2026-05-10
+daily-date-force:
+	@echo "=== Force running daily sales alert batch for $(DATE) ==="
+	docker compose exec app php artisan app:daily-sales-alert --date=$(DATE) --force
+
 worker:
-	@echo "=== Starting queue worker (Ctrl+C to stop) ==="
+	@echo "=== Starting queue worker in foreground (Ctrl+C to stop) ==="
+	@echo "Note: 'queue' container is already running. This is for debugging only."
 	docker compose exec app php artisan queue:work --verbose
 
 logs:

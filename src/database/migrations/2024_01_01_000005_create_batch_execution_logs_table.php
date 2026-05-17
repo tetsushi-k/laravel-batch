@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * 冪等性担保の核となるテーブル。
  * command_name + execution_date + status の組み合わせでチェックし、
- * 同月に同じコマンドが成功済みであれば処理をスキップする。
+ * 同月（または同日）に同じコマンドが成功済みであれば処理をスキップする。
  * --force オプション使用時は running に上書きして再実行を許可する。
+ * execution_date のカラム長は後続マイグレーション (000007) で VARCHAR(10) に拡張済み。
  */
 return new class extends Migration
 {
