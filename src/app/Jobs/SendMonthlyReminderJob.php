@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Mail;
  * - User モデルをシリアライズし、ジョブ実行時に再取得する
  *   これにより、ジョブがキューに積まれた後にユーザー情報が変更されても
  *   最新の情報でメールを送信できる
+ *
+ * ディスパッチ後〜実行までの間に未払いが解消された場合は送信しない。
  */
 class SendMonthlyReminderJob implements ShouldQueue
 {
@@ -78,6 +80,15 @@ class SendMonthlyReminderJob implements ShouldQueue
             ->where('status', 'unpaid')
             ->orderBy('created_at')
             ->get();
+
+        if ($unpaidOrders->isEmpty()) {
+            Log::info('月次リマインド: 未払いがなくなったため送信をスキップ', [
+                'user_id'      => $this->user->id,
+                'target_month' => $this->targetMonth,
+            ]);
+
+            return;
+        }
 
         Mail::to($this->user->email)
             ->send(new MonthlyReminderMail($this->user, $this->targetMonth, $unpaidOrders));
