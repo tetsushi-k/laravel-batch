@@ -35,6 +35,8 @@ Laravel 11 で実装した2本のバッチアプリケーションです。
 - `--force` オプションで強制再実行可能
 - `withoutOverlapping()` でスケジューラ多重起動を防止
 
+開発は Cursor を使用。`.cursor/rules/` のポートフォリオ品質基準（不要なファイル・処理を足さない、README と実装の整合、Seeder で `make setup` 直後に再現）と README ガイド（共通章構成・Mermaid）に沿って実装している。
+
 ---
 
 ## ② 使用技術
