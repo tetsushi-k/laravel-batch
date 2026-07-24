@@ -4,6 +4,8 @@ Laravel × Artisan Command × Queue × Mailable × Event/Listener によるバ�
 
 ECサービスを想定し、**月次集計バッチ**と**日次売上アラートバッチ**の2本を実装。バッチ処理特有の課題（**冪等性・タイムゾーン・非同期信頼性・外部API連携・イベント駆動設計**）に実務を意識した設計で取り組んでいます。
 
+ポートフォリオ上の位置: **バッチ / 非同期** の実務例。プロフィール全体は [tetsushi-k](https://github.com/tetsushi-k)。
+
 ---
 
 ## ① 概要
