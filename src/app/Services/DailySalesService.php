@@ -54,6 +54,27 @@ class DailySalesService
     }
 
     /**
+     * 集計結果のプレビューを返す（ドライラン用）。
+     *
+     * DB への保存もイベント発火も行わず、対象日の集計値のみを算出する。
+     * 副作用がないため、動作確認や環境検証で安全に実行できる。
+     *
+     * @param  string $targetDate 処理対象日 (YYYY-MM-DD)
+     * @return array{
+     *   total_amount: int,
+     *   order_count: int,
+     *   paid_count: int,
+     *   unpaid_count: int
+     * }
+     */
+    public function preview(string $targetDate): array
+    {
+        [$startOfDay, $endOfDay] = $this->getDayRange($targetDate);
+
+        return $this->aggregateStats($startOfDay, $endOfDay);
+    }
+
+    /**
      * 指定日の注文を集計し daily_sales_summaries テーブルに保存する。
      *
      * updateOrCreate を使うことで --force オプション時の再実行も安全。
@@ -63,24 +84,41 @@ class DailySalesService
         Carbon $startOfDay,
         Carbon $endOfDay
     ): DailySummary {
-        $stats = Order::whereBetween('created_at', [$startOfDay, $endOfDay])
-            ->selectRaw('
-                COUNT(*) as order_count,
-                COALESCE(SUM(amount), 0) as total_amount,
-                SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_count,
-                SUM(CASE WHEN status = "unpaid" THEN 1 ELSE 0 END) as unpaid_count
-            ')
-            ->first();
-
         return DailySummary::updateOrCreate(
             ['date' => $targetDate],
-            [
-                'total_amount' => (int) ($stats->total_amount ?? 0),
-                'order_count'  => (int) ($stats->order_count ?? 0),
-                'paid_count'   => (int) ($stats->paid_count ?? 0),
-                'unpaid_count' => (int) ($stats->unpaid_count ?? 0),
-            ]
+            $this->aggregateStats($startOfDay, $endOfDay)
         );
+    }
+
+    /**
+     * 指定期間の注文を単一クエリで集計し、集計値の配列を返す。
+     *
+     * 保存やイベント発火を含まない純粋な集計処理。execute() と preview() の両方から利用する。
+     *
+     * @return array{
+     *   total_amount: int,
+     *   order_count: int,
+     *   paid_count: int,
+     *   unpaid_count: int
+     * }
+     */
+    private function aggregateStats(Carbon $startOfDay, Carbon $endOfDay): array
+    {
+        $stats = Order::whereBetween('created_at', [$startOfDay, $endOfDay])
+            ->selectRaw("
+                COUNT(*) as order_count,
+                COALESCE(SUM(amount), 0) as total_amount,
+                SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count,
+                SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_count
+            ")
+            ->first();
+
+        return [
+            'total_amount' => (int) ($stats->total_amount ?? 0),
+            'order_count'  => (int) ($stats->order_count ?? 0),
+            'paid_count'   => (int) ($stats->paid_count ?? 0),
+            'unpaid_count' => (int) ($stats->unpaid_count ?? 0),
+        ];
     }
 
     /**

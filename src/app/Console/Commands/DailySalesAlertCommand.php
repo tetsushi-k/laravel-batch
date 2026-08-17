@@ -36,8 +36,9 @@ class DailySalesAlertCommand extends Command
      * --force: 同日の既存成功ログを無視して強制実行する。
      */
     protected $signature = 'app:daily-sales-alert
-                            {--date=  : 処理対象日 (YYYY-MM-DD)。省略時は前日}
-                            {--force  : 同日の既存成功ログを無視して強制実行する}';
+                            {--date=    : 処理対象日 (YYYY-MM-DD)。省略時は前日}
+                            {--force    : 同日の既存成功ログを無視して強制実行する}
+                            {--dry-run  : DB保存・Slack通知を行わず集計結果のみ表示する}';
 
     protected $description = '前日の売上データを集計し、Slack へアラートを送信する';
 
@@ -58,6 +59,24 @@ class DailySalesAlertCommand extends Command
         $this->info("  日次売上アラートバッチ 開始");
         $this->info("  対象日: {$targetDate}");
         $this->info("======================================");
+
+        // -----------------------------------------------------------
+        // ドライラン
+        // DB への保存も Slack 通知も行わず、集計結果のみを表示する。
+        // 副作用がないため、環境検証や動作確認に安全に利用できる。
+        // -----------------------------------------------------------
+        if ($this->option('dry-run')) {
+            $this->warn('【DRY RUN】DB保存・Slack通知は行いません。');
+
+            $result = $this->service->preview($targetDate);
+
+            $this->renderResultTable($targetDate, $result);
+
+            $this->info('');
+            $this->info('ドライランが正常に完了しました。');
+
+            return self::SUCCESS;
+        }
 
         // -----------------------------------------------------------
         // 冪等性チェック
@@ -95,18 +114,7 @@ class DailySalesAlertCommand extends Command
                           . "（支払済: {$result['paid_count']}件, 未払: {$result['unpaid_count']}件）",
             ]);
 
-            $this->info('');
-            $this->info('【集計結果】');
-            $this->table(
-                ['項目', '値'],
-                [
-                    ['対象日',        $targetDate],
-                    ['総売上金額',    '¥'.number_format($result['total_amount'])],
-                    ['総注文件数',    number_format($result['order_count']).'件'],
-                    ['支払済み件数',  number_format($result['paid_count']).'件'],
-                    ['未払い件数',    number_format($result['unpaid_count']).'件'],
-                ]
-            );
+            $this->renderResultTable($targetDate, $result);
 
             $this->info('');
             $this->info('日次売上アラートバッチが正常に完了しました。');
@@ -124,5 +132,26 @@ class DailySalesAlertCommand extends Command
 
             return self::FAILURE;
         }
+    }
+
+    /**
+     * 集計結果をテーブル形式で表示する。
+     *
+     * @param  array{total_amount:int, order_count:int, paid_count:int, unpaid_count:int} $result
+     */
+    private function renderResultTable(string $targetDate, array $result): void
+    {
+        $this->info('');
+        $this->info('【集計結果】');
+        $this->table(
+            ['項目', '値'],
+            [
+                ['対象日',        $targetDate],
+                ['総売上金額',    '¥'.number_format($result['total_amount'])],
+                ['総注文件数',    number_format($result['order_count']).'件'],
+                ['支払済み件数',  number_format($result['paid_count']).'件'],
+                ['未払い件数',    number_format($result['unpaid_count']).'件'],
+            ]
+        );
     }
 }
