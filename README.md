@@ -27,6 +27,7 @@ Laravel 11 で実装した2本のバッチアプリケーションです。
 - 集計結果を `daily_sales_summaries` テーブルに保存
 - `DailySalesReported` イベント発火 → `SendSalesAlertToSlack` リスナーが Slack 通知
 - `--date` オプションで任意の日を対象に指定可能
+- `--dry-run` オプションで集計結果だけ表示（保存・実行ログ・Slack通知なし）
 - `SLACK_WEBHOOK_URL` 未設定時は通知をスキップして正常終了
 
 ### 共通の設計方針
@@ -163,7 +164,9 @@ flowchart TD
     Trigger2["毎朝 09:00 JST<br/>Scheduler 起動"] --> Cmd2
     Manual2["手動実行<br/>php artisan app:daily-sales-alert"] --> Cmd2
 
-    Cmd2["DailySalesAlertCommand"] --> Idem2{"同日の<br/>成功ログあり?"}
+    Cmd2["DailySalesAlertCommand"] --> Dry{"--dry-run?"}
+    Dry -- "あり" --> Preview["DailySalesService::preview()<br/>集計のみ表示して終了"]
+    Dry -- "なし" --> Idem2{"同日の<br/>成功ログあり?"}
     Idem2 -- "あり（--force なし）" --> Skip2["スキップして終了"]
     Idem2 -- "なし or --force" --> RunLog2["batch_execution_logs<br/>status=running を記録"]
 
@@ -406,6 +409,10 @@ make daily
 
 # 任意の日を指定して実行
 docker compose exec app php artisan app:daily-sales-alert --date=2024-01-15
+
+# 副作用なしで集計結果だけ確認
+make daily-dry-run
+make daily-date-dry-run DATE=2024-01-15
 ```
 
 実行後の流れ：

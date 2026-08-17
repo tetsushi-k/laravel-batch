@@ -3,7 +3,7 @@
 # Usage: make <target>
 # =============================================================
 
-.PHONY: help setup up down restart bash migrate seed batch batch-force daily daily-force daily-date daily-date-force worker logs ps
+.PHONY: help setup up down restart bash migrate seed batch batch-force daily daily-force daily-date daily-date-force daily-dry-run daily-date-dry-run worker logs ps
 
 help:
 	@echo ""
@@ -22,6 +22,8 @@ help:
 	@echo "  make daily-force        Force re-run daily batch (ignore idempotency check)"
 	@echo "  make daily-date DATE=YYYY-MM-DD       Run daily batch for specific date"
 	@echo "  make daily-date-force DATE=YYYY-MM-DD Force re-run for specific date"
+	@echo "  make daily-dry-run      Preview daily batch without saving or Slack"
+	@echo "  make daily-date-dry-run DATE=YYYY-MM-DD  Preview specific date without side effects"
 	@echo "  make worker             Start queue worker in foreground (debug; queue container is already running)"
 	@echo "  make logs         Tail container logs"
 	@echo "  make ps           Show container status"
@@ -91,6 +93,15 @@ daily-date:
 daily-date-force:
 	@echo "=== Force running daily sales alert batch for $(DATE) ==="
 	docker compose exec app php artisan app:daily-sales-alert --date=$(DATE) --force
+
+daily-dry-run:
+	@echo "=== Dry-run daily sales alert batch (no save / no Slack) ==="
+	docker compose exec app php artisan app:daily-sales-alert --dry-run
+
+# 任意の日付を dry-run: make daily-date-dry-run DATE=2026-05-10
+daily-date-dry-run:
+	@echo "=== Dry-run daily sales alert batch for $(DATE) ==="
+	docker compose exec app php artisan app:daily-sales-alert --date=$(DATE) --dry-run
 
 worker:
 	@echo "=== Starting queue worker in foreground (Ctrl+C to stop) ==="

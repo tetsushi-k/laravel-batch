@@ -12,12 +12,13 @@ use Throwable;
  * 日次売上アラートバッチコマンド
  *
  * 処理の流れ:
- *   1. 冪等性チェック（同日の成功ログが存在すればスキップ）
- *   2. batch_execution_logs に status=running でログを記録
- *   3. DailySalesService::execute() を呼び出す
+ *   1. --dry-run なら集計結果だけ表示して終了（保存・実行ログ・Slackなし）
+ *   2. 冪等性チェック（同日の成功ログが存在すればスキップ）
+ *   3. batch_execution_logs に status=running でログを記録
+ *   4. DailySalesService::execute() を呼び出す
  *      - 前日の注文を集計し daily_sales_summaries に保存
  *      - DailySalesReported イベントを発火（Slack通知は SendSalesAlertToSlack リスナーが担当）
- *   4. status を success / failed に更新
+ *   5. status を success / failed に更新
  *
  * 冪等性:
  *   同日に2回実行しても重複処理しない。
@@ -32,12 +33,14 @@ class DailySalesAlertCommand extends Command
     /**
      * コマンド名とシグネチャ
      *
-     * --date:  処理対象日を指定する（デフォルト: 昨日）。YYYY-MM-DD 形式。
-     * --force: 同日の既存成功ログを無視して強制実行する。
+     * --date:    処理対象日を指定する（デフォルト: 昨日）。YYYY-MM-DD 形式。
+     * --force:   同日の既存成功ログを無視して強制実行する。
+     * --dry-run: 集計結果だけ表示し、保存・実行ログ・Slack通知は行わない。
      */
     protected $signature = 'app:daily-sales-alert
-                            {--date=  : 処理対象日 (YYYY-MM-DD)。省略時は前日}
-                            {--force  : 同日の既存成功ログを無視して強制実行する}';
+                            {--date=   : 処理対象日 (YYYY-MM-DD)。省略時は前日}
+                            {--force   : 同日の既存成功ログを無視して強制実行する}
+                            {--dry-run : 集計結果だけ表示し、保存・実行ログ・Slack通知は行わない}';
 
     protected $description = '前日の売上データを集計し、Slack へアラートを送信する';
 
@@ -58,6 +61,19 @@ class DailySalesAlertCommand extends Command
         $this->info("  日次売上アラートバッチ 開始");
         $this->info("  対象日: {$targetDate}");
         $this->info("======================================");
+
+        // -----------------------------------------------------------
+        // dry-run は副作用なし。冪等性チェックより先に抜ける。
+        // --force と同時指定しても保存・ログ・Slack は行わない。
+        // -----------------------------------------------------------
+        if ($this->option('dry-run')) {
+            $result = $this->service->preview($targetDate);
+
+            $this->warn('【dry-run】DB保存・実行ログ・Slack通知は行いません。');
+            $this->printResultTable($targetDate, $result);
+
+            return self::SUCCESS;
+        }
 
         // -----------------------------------------------------------
         // 冪等性チェック
@@ -95,18 +111,7 @@ class DailySalesAlertCommand extends Command
                           . "（支払済: {$result['paid_count']}件, 未払: {$result['unpaid_count']}件）",
             ]);
 
-            $this->info('');
-            $this->info('【集計結果】');
-            $this->table(
-                ['項目', '値'],
-                [
-                    ['対象日',        $targetDate],
-                    ['総売上金額',    '¥'.number_format($result['total_amount'])],
-                    ['総注文件数',    number_format($result['order_count']).'件'],
-                    ['支払済み件数',  number_format($result['paid_count']).'件'],
-                    ['未払い件数',    number_format($result['unpaid_count']).'件'],
-                ]
-            );
+            $this->printResultTable($targetDate, $result);
 
             $this->info('');
             $this->info('日次売上アラートバッチが正常に完了しました。');
@@ -124,5 +129,24 @@ class DailySalesAlertCommand extends Command
 
             return self::FAILURE;
         }
+    }
+
+    /**
+     * @param  array{total_amount: int, order_count: int, paid_count: int, unpaid_count: int}  $result
+     */
+    private function printResultTable(string $targetDate, array $result): void
+    {
+        $this->info('');
+        $this->info('【集計結果】');
+        $this->table(
+            ['項目', '値'],
+            [
+                ['対象日',        $targetDate],
+                ['総売上金額',    '¥'.number_format($result['total_amount'])],
+                ['総注文件数',    number_format($result['order_count']).'件'],
+                ['支払済み件数',  number_format($result['paid_count']).'件'],
+                ['未払い件数',    number_format($result['unpaid_count']).'件'],
+            ]
+        );
     }
 }

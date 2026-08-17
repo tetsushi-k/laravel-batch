@@ -45,12 +45,30 @@ class DailySalesService
         // ロールバック時に Slack 通知だけが飛ぶ事故を防ぐため、意図的にトランザクション外に置く。
         event(new DailySalesReported($summary));
 
-        return [
-            'total_amount' => $summary->total_amount,
-            'order_count'  => $summary->order_count,
-            'paid_count'   => $summary->paid_count,
-            'unpaid_count' => $summary->unpaid_count,
-        ];
+        return $this->toResult($summary->total_amount, $summary->order_count, $summary->paid_count, $summary->unpaid_count);
+    }
+
+    /**
+     * 集計結果だけ返す。保存・イベント発火は行わない（--dry-run 用）。
+     *
+     * @return array{
+     *   total_amount: int,
+     *   order_count: int,
+     *   paid_count: int,
+     *   unpaid_count: int
+     * }
+     */
+    public function preview(string $targetDate): array
+    {
+        [$startOfDay, $endOfDay] = $this->getDayRange($targetDate);
+        $stats = $this->aggregate($startOfDay, $endOfDay);
+
+        return $this->toResult(
+            $stats->total_amount ?? 0,
+            $stats->order_count ?? 0,
+            $stats->paid_count ?? 0,
+            $stats->unpaid_count ?? 0
+        );
     }
 
     /**
@@ -63,14 +81,7 @@ class DailySalesService
         Carbon $startOfDay,
         Carbon $endOfDay
     ): DailySummary {
-        $stats = Order::whereBetween('created_at', [$startOfDay, $endOfDay])
-            ->selectRaw('
-                COUNT(*) as order_count,
-                COALESCE(SUM(amount), 0) as total_amount,
-                SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_count,
-                SUM(CASE WHEN status = "unpaid" THEN 1 ELSE 0 END) as unpaid_count
-            ')
-            ->first();
+        $stats = $this->aggregate($startOfDay, $endOfDay);
 
         return DailySummary::updateOrCreate(
             ['date' => $targetDate],
@@ -81,6 +92,36 @@ class DailySalesService
                 'unpaid_count' => (int) ($stats->unpaid_count ?? 0),
             ]
         );
+    }
+
+    private function aggregate(Carbon $startOfDay, Carbon $endOfDay): Order
+    {
+        return Order::whereBetween('created_at', [$startOfDay, $endOfDay])
+            ->selectRaw('
+                COUNT(*) as order_count,
+                COALESCE(SUM(amount), 0) as total_amount,
+                SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_count,
+                SUM(CASE WHEN status = "unpaid" THEN 1 ELSE 0 END) as unpaid_count
+            ')
+            ->first();
+    }
+
+    /**
+     * @return array{
+     *   total_amount: int,
+     *   order_count: int,
+     *   paid_count: int,
+     *   unpaid_count: int
+     * }
+     */
+    private function toResult(mixed $totalAmount, mixed $orderCount, mixed $paidCount, mixed $unpaidCount): array
+    {
+        return [
+            'total_amount' => (int) $totalAmount,
+            'order_count'  => (int) $orderCount,
+            'paid_count'   => (int) $paidCount,
+            'unpaid_count' => (int) $unpaidCount,
+        ];
     }
 
     /**
