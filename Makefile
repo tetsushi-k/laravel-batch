@@ -3,7 +3,7 @@
 # Usage: make <target>
 # =============================================================
 
-.PHONY: help setup up down restart bash migrate seed batch batch-force daily daily-force daily-date daily-date-force worker logs ps
+.PHONY: help setup up down restart bash migrate seed batch batch-force daily daily-force daily-date daily-date-force worker logs ps test
 
 help:
 	@echo ""
@@ -25,6 +25,7 @@ help:
 	@echo "  make worker             Start queue worker in foreground (debug; queue container is already running)"
 	@echo "  make logs         Tail container logs"
 	@echo "  make ps           Show container status"
+	@echo "  make test         Run PHPUnit Feature tests"
 	@echo ""
 
 # First-time setup: composer install -> copy .env -> key:generate -> migrate -> seed
@@ -102,3 +103,7 @@ logs:
 
 ps:
 	docker compose compose ps
+
+test:
+	@echo "=== Running PHPUnit ==="
+	docker compose exec app php artisan test

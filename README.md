@@ -55,6 +55,8 @@ Laravel 11 で実装した2本のバッチアプリケーションです。
 | イベント設計 | Laravel Event / Listener |
 | 定期実行 | Laravel Scheduler |
 | タイムゾーン | Asia/Tokyo（JST） |
+| テスト | PHPUnit 11 / SQLite in-memory |
+| CI | GitHub Actions |
 
 ---
 
@@ -415,6 +417,15 @@ docker compose exec app php artisan app:daily-sales-alert --date=2024-01-15
 2. `DailySalesReported` イベントが発火し `SendSalesAlertToSlack` リスナーが Slack に通知
 3. `SLACK_WEBHOOK_URL` 未設定の場合はスキップしてログに記録
 
+### テストの実行
+
+```bash
+make test
+```
+
+コンテナ内で `php artisan test` を実行し、月次バッチ・日次バッチ・リマインドジョブの Feature テストを走らせる。
+CI（GitHub Actions）でも同じコマンドが実行される。
+
 ### 冪等性の確認
 
 ```bash
@@ -450,6 +461,7 @@ make batch          # 月次バッチ実行
 make batch-force    # 月次バッチ強制再実行
 make daily          # 日次バッチ実行
 make daily-force    # 日次バッチ強制再実行
+make test           # PHPUnit Feature テスト実行
 make worker         # Queue Worker をフォアグラウンド起動（デバッグ用・通常は queue コンテナが常駐）
 make logs           # ログ表示
 ```
@@ -494,8 +506,14 @@ laravel-batch/
 │   │   └── seeders/                                    # ユーザー5件・注文20件
 │   ├── resources/views/emails/
 │   │   └── monthly_reminder.blade.php                  # HTML メールテンプレート
-│   └── routes/
-│       └── console.php                                 # Scheduler 定義（月次・日次）
+│   ├── routes/
+│   │   └── console.php                                 # Scheduler 定義（月次・日次）
+│   ├── tests/Feature/
+│   │   ├── MonthlyReportCommandTest.php                # 月次バッチの Feature テスト
+│   │   ├── DailySalesAlertCommandTest.php              # 日次バッチの Feature テスト
+│   │   └── SendMonthlyReminderJobTest.php              # リマインドジョブの Feature テスト
+│   └── phpunit.xml                                     # PHPUnit 設定（SQLite in-memory）
+├── .github/workflows/tests.yml                         # GitHub Actions（php artisan test）
 ├── docker-compose.yml
 ├── Makefile
 └── README.md

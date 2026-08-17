@@ -14,6 +14,7 @@ FROM php:8.2-fpm
 # - libpng-dev / libjpeg-dev / libfreetype6-dev: GD拡張（画像処理）用
 # - libonig-dev: mbstring拡張（マルチバイト文字の処理）用
 # - libxml2-dev: xml / soap 拡張用
+# - libsqlite3-dev: PHPUnit の in-memory SQLite 用
 # - zip / unzip: Composerのパッケージ展開に必要
 # -----------------------------------------------------------
 RUN apt-get update && apt-get install -y \
@@ -24,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libonig-dev \
     libxml2-dev \
+    libsqlite3-dev \
     zip \
     unzip \
     && apt-get clean \
@@ -32,6 +34,7 @@ RUN apt-get update && apt-get install -y \
 # -----------------------------------------------------------
 # PHP拡張のインストール
 # - pdo_mysql: LaravelからMySQLに接続するために必要
+# - pdo_sqlite: PHPUnit in-memory SQLite 用
 # - mbstring: 日本語などマルチバイト文字列の処理に必要
 # - exif: 画像のメタ情報処理（オプション）
 # - pcntl: Queue Workerのシグナル処理（graceful shutdown）に必要
@@ -41,6 +44,7 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
     pdo_mysql \
+    pdo_sqlite \
     mbstring \
     exif \
     pcntl \

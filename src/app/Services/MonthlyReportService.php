@@ -70,12 +70,12 @@ class MonthlyReportService
     ): MonthlyReport {
         // 単一クエリで全集計を取得（N+1 回避）
         $stats = Order::whereBetween('created_at', [$startDate, $endDate])
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_orders,
                 COALESCE(SUM(amount), 0) as total_amount,
-                SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_orders,
-                SUM(CASE WHEN status = "unpaid" THEN 1 ELSE 0 END) as unpaid_orders
-            ')
+                SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_orders,
+                SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_orders
+            ")
             ->first();
 
         return MonthlyReport::updateOrCreate(

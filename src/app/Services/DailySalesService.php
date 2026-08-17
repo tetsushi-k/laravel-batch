@@ -64,16 +64,16 @@ class DailySalesService
         Carbon $endOfDay
     ): DailySummary {
         $stats = Order::whereBetween('created_at', [$startOfDay, $endOfDay])
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as order_count,
                 COALESCE(SUM(amount), 0) as total_amount,
-                SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_count,
-                SUM(CASE WHEN status = "unpaid" THEN 1 ELSE 0 END) as unpaid_count
-            ')
+                SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count,
+                SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_count
+            ")
             ->first();
 
         return DailySummary::updateOrCreate(
-            ['date' => $targetDate],
+            ['date' => Carbon::parse($targetDate)->startOfDay()],
             [
                 'total_amount' => (int) ($stats->total_amount ?? 0),
                 'order_count'  => (int) ($stats->order_count ?? 0),
