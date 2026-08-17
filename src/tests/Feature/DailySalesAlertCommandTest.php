@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -19,13 +20,15 @@ class DailySalesAlertCommandTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const WEBHOOK_URL = 'https://hooks.slack.com/services/T000/B000/TEST';
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Carbon::setTestNow(Carbon::parse('2026-08-17 12:00:00', 'Asia/Tokyo'));
         Http::fake([
-            'https://hooks.slack.com/services/T000/B000/TEST' => Http::response('ok', 200),
+            self::WEBHOOK_URL => Http::response('ok', 200),
         ]);
     }
 
@@ -58,6 +61,7 @@ class DailySalesAlertCommandTest extends TestCase
         $this->assertSame(5, $summary->order_count);
         $this->assertSame(3, $summary->paid_count);
         $this->assertSame(2, $summary->unpaid_count);
+        $this->assertFalse(Schema::hasColumn('daily_sales_summaries', 'unpaid_amount'));
     }
 
     public function test_without_date_uses_yesterday(): void
@@ -90,13 +94,15 @@ class DailySalesAlertCommandTest extends TestCase
         $this->assertSame(7800, $summary->total_amount);
     }
 
-    public function test_webhook_slack_text_contains_date_amount_and_unpaid_warning(): void
+    public function test_webhook_slack_text_contains_unpaid_amount_when_unpaid_exists(): void
     {
-        config(['services.slack.webhook_url' => 'https://hooks.slack.com/services/T000/B000/TEST']);
+        config(['services.slack.webhook_url' => self::WEBHOOK_URL]);
 
         $user = $this->createUser('slack-warning@example.com');
         $this->createOrder($user, 7800, 'paid', '2026-08-16 10:00:00');
+        $this->createOrder($user, 13200, 'paid', '2026-08-16 11:30:00');
         $this->createOrder($user, 4500, 'unpaid', '2026-08-16 14:15:00');
+        $this->createOrder($user, 9600, 'paid', '2026-08-16 16:45:00');
         $this->createOrder($user, 3000, 'unpaid', '2026-08-16 20:00:00');
 
         $this->artisan('app:daily-sales-alert', ['--date' => '2026-08-16'])->assertSuccessful();
@@ -104,16 +110,17 @@ class DailySalesAlertCommandTest extends TestCase
         Http::assertSent(function ($request) {
             $text = $request['text'] ?? '';
 
-            return $request->url() === 'https://hooks.slack.com/services/T000/B000/TEST'
+            return $request->url() === self::WEBHOOK_URL
                 && str_contains($text, '2026年08月16日')
-                && str_contains($text, '¥15,300')
-                && str_contains($text, ':warning: 未払い注文が *2件* あります。');
+                && str_contains($text, ':yen: 総売上金額：*¥38,100*')
+                && str_contains($text, ':warning: 未払い注文が *2件* あります。')
+                && str_contains($text, ':yen: 未払い合計金額：*¥7,500*');
         });
     }
 
-    public function test_all_paid_slack_text_uses_check_mark_without_warning(): void
+    public function test_all_paid_slack_text_omits_unpaid_amount_line(): void
     {
-        config(['services.slack.webhook_url' => 'https://hooks.slack.com/services/T000/B000/TEST']);
+        config(['services.slack.webhook_url' => self::WEBHOOK_URL]);
 
         $user = $this->createUser('all-paid@example.com');
         $this->createOrder($user, 7800, 'paid', '2026-08-16 10:00:00');
@@ -125,13 +132,36 @@ class DailySalesAlertCommandTest extends TestCase
             $text = $request['text'] ?? '';
 
             return str_contains($text, ':white_check_mark: 未払い注文はありません。')
+                && ! str_contains($text, '未払い合計金額')
                 && ! str_contains($text, ':warning:');
         });
     }
 
+    public function test_dry_run_shows_totals_without_saving_or_notifying(): void
+    {
+        config(['services.slack.webhook_url' => self::WEBHOOK_URL]);
+
+        $user = $this->createUser('dry-run@example.com');
+        $this->createOrder($user, 7800, 'paid', '2026-08-16 10:00:00');
+        $this->createOrder($user, 4500, 'unpaid', '2026-08-16 14:15:00');
+        $this->createOrder($user, 3000, 'unpaid', '2026-08-16 20:00:00');
+
+        $this->artisan('app:daily-sales-alert', [
+            '--date' => '2026-08-16',
+            '--dry-run' => true,
+        ])
+            ->expectsOutputToContain('DRY RUN')
+            ->expectsOutputToContain('¥15,300')
+            ->assertSuccessful();
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('daily_sales_summaries', 0);
+        $this->assertDatabaseCount('batch_execution_logs', 0);
+    }
+
     public function test_idempotent_skip_and_force_re_sends_slack_without_duplicating_summary(): void
     {
-        config(['services.slack.webhook_url' => 'https://hooks.slack.com/services/T000/B000/TEST']);
+        config(['services.slack.webhook_url' => self::WEBHOOK_URL]);
 
         $user = $this->createUser('daily-force@example.com');
         $this->createOrder($user, 7800, 'paid', '2026-08-16 10:00:00');
