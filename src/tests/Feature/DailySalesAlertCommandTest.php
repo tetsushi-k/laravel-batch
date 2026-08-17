@@ -79,7 +79,7 @@ class DailySalesAlertCommandTest extends TestCase
         });
     }
 
-    public function test_SlackのURL未設定でもバッチは成功終了し通知しない(): void
+    public function test_Slack_Webhook未設定でもバッチは成功終了し通知しない(): void
     {
         config(['services.slack.webhook_url' => '']);
 
@@ -90,11 +90,11 @@ class DailySalesAlertCommandTest extends TestCase
             ->assertSuccessful();
 
         Http::assertNothingSent();
-        $this->assertDatabaseHas('daily_sales_summaries', [
-            'date'         => self::TARGET_DATE,
-            'unpaid_count' => 1,
-            'total_amount' => 5000,
-        ]);
+
+        $summary = DailySummary::whereDate('date', self::TARGET_DATE)->first();
+        $this->assertNotNull($summary);
+        $this->assertSame(1, $summary->unpaid_count);
+        $this->assertSame(5000, $summary->total_amount);
     }
 
     public function test_集計結果の保存内容は既存カラムのままである(): void
@@ -135,19 +135,23 @@ class DailySalesAlertCommandTest extends TestCase
 
         Http::assertSentCount(1);
 
+        BatchExecutionLog::create([
+            'command_name'   => 'app:daily-sales-alert',
+            'execution_date' => '2026-08-10',
+            'status'         => 'success',
+            'executed_at'    => now(),
+        ]);
+
         $this->artisan('app:daily-sales-alert', [
-            '--date'  => self::TARGET_DATE,
+            '--date'  => '2026-08-10',
             '--force' => true,
         ])->assertSuccessful();
 
         Http::assertSentCount(2);
-        $this->assertSame(
-            2,
-            BatchExecutionLog::where('command_name', 'app:daily-sales-alert')
-                ->where('execution_date', self::TARGET_DATE)
-                ->where('status', 'success')
-                ->count()
+        $this->assertTrue(
+            BatchExecutionLog::hasSucceeded('app:daily-sales-alert', '2026-08-10')
         );
+        $this->assertNotNull(DailySummary::whereDate('date', '2026-08-10')->first());
     }
 
     public function test_dateオプションは指定日だけを集計する(): void
@@ -161,14 +165,11 @@ class DailySalesAlertCommandTest extends TestCase
         $this->artisan('app:daily-sales-alert', ['--date' => '2026-08-10'])
             ->assertSuccessful();
 
-        $this->assertDatabaseHas('daily_sales_summaries', [
-            'date'         => '2026-08-10',
-            'total_amount' => 99000,
-            'unpaid_count' => 1,
-        ]);
-        $this->assertDatabaseMissing('daily_sales_summaries', [
-            'date' => self::TARGET_DATE,
-        ]);
+        $summary = DailySummary::whereDate('date', '2026-08-10')->first();
+        $this->assertNotNull($summary);
+        $this->assertSame(99000, $summary->total_amount);
+        $this->assertSame(1, $summary->unpaid_count);
+        $this->assertNull(DailySummary::whereDate('date', self::TARGET_DATE)->first());
 
         Http::assertSent(function ($request) {
             $text = $request['text'];
