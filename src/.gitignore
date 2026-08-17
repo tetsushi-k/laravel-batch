@@ -3,6 +3,8 @@
 /public/storage
 /storage/*.key
 /vendor
+/database/*.sqlite
+/database/*.sqlite-journal
 .env
 .env.backup
 .env.production
